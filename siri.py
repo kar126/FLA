@@ -1,57 +1,79 @@
-def remove_epsilon_productions(grammar):
-    def nullable(nonterminal, epsilon_producing, nullable_symbols):
-        # A nonterminal is nullable if it directly produces ε or all its symbols are nullable
-        if nonterminal in epsilon_producing:
-            return True
-        return all(symbol in nullable_symbols for symbol in grammar[nonterminal])
+import tkinter as tk
 
-    def generate_new_productions(grammar, epsilon_producing):
-        new_grammar = {}
-        nullable_symbols = set()
+# Function to eliminate epsilon productions in the CFG
+def eliminate_epsilon_productions(cfg_text):
+    productions = {}
+    non_terminals = set()
 
-        # Step 1: Identify epsilon-producing nonterminals
-        for nonterminal, productions in grammar.items():
-            if 'ε' in productions:
-                epsilon_producing.add(nonterminal)
-                nullable_symbols.add(nonterminal)
+    # Split input text into lines and process each line
+    lines = cfg_text.strip().split('\n')
+    for line in lines:
+        line = line.strip()
+        if line:
+            parts = line.split('->')
+            lhs = parts[0].strip()
+            rhs = parts[1].strip()
 
-        # Step 2: Find all nullable symbols
-        while True:
-            added_nullable = False
-            for nonterminal in grammar:
-                if nonterminal not in nullable_symbols and nullable(nonterminal, epsilon_producing, nullable_symbols):
-                    nullable_symbols.add(nonterminal)
-                    added_nullable = True
-            if not added_nullable:
-                break
+            non_terminals.add(lhs)
+            symbols = rhs.split('|')
+            productions[lhs] = symbols
 
-        # Step 3: Generate new productions without ε
-        for nonterminal, productions in grammar.items():
-            new_productions = set()
-            for production in productions:
-                if not any(symbol in epsilon_producing and symbol not in nullable_symbols for symbol in production):
-                    new_productions.add(production.replace('ε', ''))
+    # Find nullable non-terminals
+    nullable = set()
+    changed = True
 
-            new_grammar[nonterminal] = new_productions
+    while changed:
+        changed = False
+        for non_terminal, symbols in productions.items():
+            for symbol in symbols:
+                if all(s in nullable or s == 'ε' or not s.isupper() for s in symbol):
+                    if non_terminal not in nullable:
+                        nullable.add(non_terminal)
+                        changed = True
 
-        return new_grammar
+    # Generate new productions to eliminate ε-productions
+    updated_productions = {key: [value for value in values if value != 'ε'] for key, values in productions.items()}
 
-    epsilon_producing = set()
-    new_grammar = generate_new_productions(grammar, epsilon_producing)
+    for key, values in productions.items():
+        for symbol in values:
+            if all(s in nullable or s == 'ε' for s in symbol):
+                for subset in range(1, 2 ** len(symbol)):
+                    new_prod = ''.join(symbol[i] for i in range(len(symbol)) if not ((subset >> i) & 1))
+                    if new_prod and new_prod not in updated_productions[key]:
+                        updated_productions[key].append(new_prod)
 
-    return new_grammar
+    return updated_productions
 
-# Example grammar represented as a dictionary
-grammar = {
-    'S': {'AaAb', 'ε'},
-    'A': {'B', 'ε'},
-    'B': {'c'}
-}
+# Function to handle the GUI process button
+def process_cfg():
+    input_text = input_textbox.get("1.0", "end-1c")  # Get text from input textbox
+    updated_cfg = eliminate_epsilon_productions(input_text)
+    
+    output_textbox.delete("1.0", "end")  # Clear previous content in output textbox
+    for key, values in updated_cfg.items():
+        output_textbox.insert("end", f"{key} -> {'|'.join(values)}\n")  # Display the result in output textbox
 
-# Remove ε productions
-new_grammar = remove_epsilon_productions(grammar)
+# Create the main application window
+app = tk.Tk()
+app.title("CFG Epsilon Eliminator")
 
-# Display the modified grammar
-for nonterminal, productions in new_grammar.items():
-    for production in productions:
-        print(f"{nonterminal} -> {production}")
+# Input Textbox
+input_label = tk.Label(app, text="Enter CFG:")
+input_label.pack()
+
+input_textbox = tk.Text(app, height=10, width=40)
+input_textbox.pack()
+
+# Output Textbox
+output_label = tk.Label(app, text="CFG without ε-productions:")
+output_label.pack()
+
+output_textbox = tk.Text(app, height=10, width=40)
+output_textbox.pack()
+
+# Process Button
+process_button = tk.Button(app, text="Process CFG", command=process_cfg)
+process_button.pack()
+
+# Start the GUI application
+app.mainloop()
